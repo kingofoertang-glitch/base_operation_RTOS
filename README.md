@@ -1,4 +1,4 @@
-# day21-FreeRTOS入门
+# FreeRTOS入门和基本操作
 
 ## 下载源代码
 
