@@ -7,18 +7,17 @@
 #include "task.h"
 #include "bsp_keys.h"
 
+#include "timers.h"
 /************************
 模板工程: 
 
-串口中断(代表所有其他中断) 收到任何消息, 任务恢复 
 
-- 开启Timer: 每隔1s打印一个日志Timer
+创建FreeRTOS的Timer定时器, 每秒打一个日志
 
-1. task1: 每隔1s打印一个不断打印task1
-
-2. 按键任务taskKey: 
-    - PC0: 按下 关闭所有中断
-    - PC1: 按下 开启所有中断 
+按键任务: 扫描4个独立按键
+按键1: 停止Timer
+按键2: 启用Timer
+按键3: 删除Timer
 
 
 中断的数字越小，优先级越高，范围【0，15】
@@ -61,6 +60,7 @@ void vTask1(){
     vTaskDelete(NULL);
 }
 
+
 void GPIO_init(){
     // 1. 时钟初始化
     rcu_periph_clock_enable(RCU_GPIOA);
@@ -68,33 +68,8 @@ void GPIO_init(){
     gpio_mode_set(GPIOA, GPIO_MODE_INPUT, GPIO_PUPD_NONE, GPIO_PIN_0);
 }
 
-static void TIMER_config() {
-    // 时钟配置
-    rcu_periph_clock_enable(RCU_TIMER5);
 
-    // 复位定时器
-    timer_deinit(TIMER5);
-    rcu_timer_clock_prescaler_config(RCU_TIMER_PSC_MUL4);
-    timer_parameter_struct tps;
-    timer_struct_para_init(&tps);
-    tps.prescaler = 10000 - 1; // 分频系数  168 000 000  分母 >= 2567
-    tps.period = SystemCoreClock / 10000 / 1 - 1; // 周期
 
-    timer_init(TIMER5, &tps);
-    nvic_irq_enable(TIMER5_DAC_IRQn, 7, 0);
-    
-    timer_interrupt_enable(TIMER5, TIMER_INT_UP);
-    timer_enable(TIMER5);
-}
-
-void TIMER5_DAC_IRQHandler(void) {
-    if(SET == timer_interrupt_flag_get(TIMER5, TIMER_INT_FLAG_UP)) {
-        //清除中断标志位
-        timer_interrupt_flag_clear(TIMER5,TIMER_INT_FLAG_UP);
-        
-        printf("Timer5\n");
-    }
-}
 
 void Keys_on_keydown(uint8_t key){
 
@@ -102,42 +77,44 @@ void Keys_on_keydown(uint8_t key){
     switch (key)
     {
     	case 0: 
-            printf("关闭中断\n");
+            printf("停止Timer\n");
             portDISABLE_INTERRUPTS();
             
     		break;
     	case 1: 
-            printf("启用中断\n");
+            printf("启用Timer\n");
             portENABLE_INTERRUPTS();
             break;
     	case 2: 
+						printf("删除Timer\n");
+						
             break;
     	default:
     		break;
     }
-    
-/*********************************
-通过portDISABLE_INTERRUPTS()禁用终端， 会导致以下两个中断也被停止，   
-    1. 系统滴答定时器（SysTick）中断
-    2. PendSV中断（用于任务切换）
-    
-FreeRTOS无法进行任务调度。其他任务也无法正常运行和切换。
-    
-通常禁用中断要和启用中断连续使用，中间的操作尽可能少，不能间隔太久时间。    
-*********************************/
-}
+	}    
 
 void sys_init(){
     // 1. 初始化外设
     GPIO_init();
     USART0_init();
-    TIMER_config();
+    
     
     // hardware
     bsp_keys_init();
 }
 
+TimerHandle_t  timer1_handle;
 
+uint32_t time_cnt =0;
+
+void timer_cb(){
+
+	printf("timer: %d\n",time_cnt);
+	
+	
+}
+	
 void vTaskFunc(uint8_t *pvParameters){
     // 1. 初始化外设 
     sys_init();
@@ -149,7 +126,27 @@ void vTaskFunc(uint8_t *pvParameters){
     // a. 当前任务继续运行
     // b. 任务切换被禁止
     // c. 部分中断被屏蔽（优先级低于 configMAX_SYSCALL_INTERRUPT_PRIORITY ）
-    
+  
+		//创建Timer
+#if 0
+	
+		TimerHandle_t xTimerCreate( const char * const pcTimerName, /*lint !e971 Unqualified char types are allowed for strings and single characters only. */
+				const TickType_t xTimerPeriodInTicks,
+				const BaseType_t xAutoReload,
+				void * const pvTimerID,
+				TimerCallbackFunction_t pxCallbackFunction )
+       
+#endif
+		//创建Timer,间隔1000ms
+ timer1_handle = xTimerCreate( "Timer1",
+        pdMS_TO_TICKS(1000),    // 间隔时间(周期), 单位ticks, 通过宏把ms转成ticks
+        pdFALSE,                 // 是否自动重载
+        (void*) 1,              // 定时器 Id
+        timer_cb
+    );
+			//启用Timer
+				xTimerStart(timer1_handle);
+  
     // 2. 创建3个独立的任务
     xTaskCreate( vTaskKey,  "vTaskKey", 64, NULL, 3, &xTaskKey_Handle );
     xTaskCreate( vTask1,    "vTask1",   64, NULL, 4, &xTask1_Handle   );
