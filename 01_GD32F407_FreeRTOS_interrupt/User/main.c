@@ -77,8 +77,8 @@ static void TIMER_config() {
     rcu_timer_clock_prescaler_config(RCU_TIMER_PSC_MUL4);
     timer_parameter_struct tps;
     timer_struct_para_init(&tps);
-    tps.prescaler = 5000 - 1; // 分频系数  168 000 000  分母 >= 2567
-    tps.period = SystemCoreClock / 5000 / 1 - 1; // 周期
+    tps.prescaler = 10000 - 1; // 分频系数  168 000 000  分母 >= 2567
+    tps.period = SystemCoreClock / 10000 / 1 - 1; // 周期
 
     timer_init(TIMER5, &tps);
     nvic_irq_enable(TIMER5_DAC_IRQn, 7, 0);
