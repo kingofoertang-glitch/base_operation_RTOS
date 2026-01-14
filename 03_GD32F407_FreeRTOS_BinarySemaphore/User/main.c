@@ -7,64 +7,48 @@
 #include "task.h"
 #include "bsp_keys.h"
 
+#include "semphr.h"
 #include "timers.h"
 /************************
 模板工程: 
 
+3个独立的任务
 
-创建FreeRTOS的Timer定时器, 每秒打一个日志
+1.按键任务:PA0按下,发送信号
+2,task1:等待接受信号
+3,task2:不等待,间隔2000ms执行
 
-按键任务: 扫描4个独立按键
-按键1: 停止Timer
-按键2: 启用Timer
-按键3: 删除Timer
+-----------------------------
+创建二值信号量(二进制信号量)semphr.h
+-task1:等待信号
+-taskKey:发送信号
 
-
-中断的数字越小，优先级越高，范围【0，15】
-任务的数字越大，优先级越高，范围【0，31】
 *************************/
 
 
 TaskHandle_t xStartTask_Handle;
 TaskHandle_t xTaskKey_Handle;
 TaskHandle_t xTask1_Handle;
+TaskHandle_t xTask2_Handle;
 
-
+SemaphoreHandle_t xSemaphore = NULL;
 
 TimerHandle_t  timer1_handle;
 TimerHandle_t  timer2_handle;
 
 void USART0_on_recv(uint8_t* data, uint32_t len){
     printf("recv[%d]-> %s\n", len, data);
-		BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-	//0:启动timer1
-	//1:停止timer2
-	//2:启动timer2
-		if(data[0]==0x00){
-			//启动timer1
-				xTimerStartFromISR(timer1_handle,&xHigherPriorityTaskWoken);
-		}else if(data[0]==0x01){
-			//停止timer2
-				xTimerStopFromISR(timer2_handle,&xHigherPriorityTaskWoken);
-		}if(data[0]==0x02){
-			//启动timer2
-				xTimerStartFromISR(timer2_handle,&xHigherPriorityTaskWoken);
-		}
-			
-		if (xHigherPriorityTaskWoken != pdFALSE){
-			//当前中断退出前,自动触发切换到更高优先级的任务(触发)
-				portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-		}
+	
+		
 }
 
 void vTaskKey(){
 
+		FlagStatus pre_state =RESET;
     while(1){
-        bsp_keys_scan();
-
-        delay_1ms(10);     
-
-        //vTaskDelay(10);  // 该函数内部会自动启用所有的中断, 有禁用操作后, 如果忘了启用，此函数会自动启用中断，使代码正常运行   
+        FlagStatus cur_state =gpio_input_bit_get(GPIOA,GPIO_PIN_0);
+			
+        vTaskDelay(10);  // 该函数内部会自动启用所有的中断, 有禁用操作后, 如果忘了启用，此函数会自动启用中断，使代码正常运行   
     }
     // 如果任务有可能结束, 一定要销毁自己
     vTaskDelete(NULL);
@@ -74,12 +58,21 @@ int8_t count = 1;
 
 void vTask1(){
     uint32_t cnt = 0;
+		BaseType_t xReturn =pdFALSE; //pdTRUE
     while(1){
-        printf("task1: %d\n", cnt++);  
-        vTaskDelay(1000); 
+		//阻塞等待,直到获取到信号
+			xSemaphoreTake(xSemaphore,portMAX_DELAY);//		pdMS_TO_TICKS(2000);
+      printf("task1: %d xReturn: %ld\n", cnt++,xReturn);   
+			vTaskDelay(pdMS_TO_TICKS(100));
+		}
+}
+
+
+void vTask2(){
+    uint32_t cnt = 0;
+    while(1){
+     //   printf("task1: %d\n", cnt++);   
     }
-    // 如果任务有可能结束, 一定要销毁自己
-    vTaskDelete(NULL);
 }
 
 
@@ -92,59 +85,13 @@ void GPIO_init(){
 
 
 
-void Keys_on_keydown(uint8_t key){
-
-
-    switch (key)
-    {
-    	case 0: 
-            printf("停止Timer\n");
-						if(timer2_handle != NULL){
-						xTimerStop(timer2_handle, 0); // pdMS_TO_TICKS
-						}
-    		break;
-    	case 1: 
-            printf("启用Timer\n");
-						if(timer2_handle != NULL){
-							xTimerStart(timer2_handle,0);
-            }
-						break;
-    	case 2: 
-						printf("删除Timer\n");
-					
-						if(timer2_handle != NULL){
-								xTimerDelete(timer2_handle,0);
-								timer2_handle = NULL;
-						}		
-						break;
-    	default:
-    		break;
-    }
-	}    
 
 void sys_init(){
     // 1. 初始化外设
     GPIO_init();
     USART0_init();
-
-    // hardware
-    bsp_keys_init();
 }
 
-
-
-uint32_t timer1_cnt = 0;
-uint32_t timer2_cnt = 0;
-
-void timer_cb(TimerHandle_t pxTimer){
-    int timerId = (int)pvTimerGetTimerID(pxTimer);
-
-    if(timerId == 1){
-        printf("timer1: %d\n", timer1_cnt++);
-    }else if(timerId == 2){
-        printf("timer2: %d\n", timer2_cnt++);
-    }
-}
 
 void vTaskFunc(uint8_t *pvParameters){
     // 1. 初始化外设 
@@ -152,48 +99,19 @@ void vTaskFunc(uint8_t *pvParameters){
 
     printf("Init Complete!\n");
 
-    // 进入临界区, 所有任务会被禁止切换，中断被屏蔽 ---------------------------
-    taskENTER_CRITICAL();
-    // a. 当前任务继续运行
-    // b. 任务切换被禁止
-    // c. 部分中断被屏蔽（优先级低于 configMAX_SYSCALL_INTERRUPT_PRIORITY ）
-
-		//创建Timer
-#if 0
-
-		TimerHandle_t xTimerCreate( const char * const pcTimerName, /*lint !e971 Unqualified char types are allowed for strings and single characters only. */
-				const TickType_t xTimerPeriodInTicks,
-				const BaseType_t xAutoReload,
-				void * const pvTimerID,
-				TimerCallbackFunction_t pxCallbackFunction )
-
-#endif
-		//创建Timer,间隔1000ms
- timer1_handle = xTimerCreate( "Timer1",
-        pdMS_TO_TICKS(1000),    // 间隔时间(周期), 单位ticks, 通过宏把ms转成ticks
-        pdFALSE,                 // 是否自动重载
-        (void*) 1,              // 定时器 Id
-        timer_cb
-    );		
-
-
-		//创建Timer,间隔1000ms
- timer2_handle = xTimerCreate( "Timer2",
-        pdMS_TO_TICKS(500),    // 间隔时间(周期), 单位ticks, 通过宏把ms转成ticks
-        pdTRUE,                 // 是否自动重载
-        (void*) 2,              // 定时器 Id
-        timer_cb
-    );
-			//启用Timer
-				//参数2:  xTicksToWait:当Timer任务队列已满时,最大等待时间为0
-				xTimerStart(timer1_handle,0);
-  			xTimerStart(timer2_handle,0);
-
-
+		//创建二值信号量
+		xSemaphoreCreateBinary();
+		if( xSemaphore != NULL )	{
+			printf("The semaphore was created successfully\n");
+		}
+	
+		//进入临界区,所有任务都会被禁止切换,中断被屏蔽---
+		taskENTER_CRITICAL();
 
     // 2. 创建1个独立的任务
     xTaskCreate( vTaskKey,  "vTaskKey", 64, NULL, 1, &xTaskKey_Handle );
-//    xTaskCreate( vTask1,    "vTask1",   64, NULL, 4, &xTask1_Handle   );
+    xTaskCreate( vTask1,    "vTask1",   64, NULL, 2, &xTask1_Handle   );
+    xTaskCreate( vTask2,  	"vTask2", 	64, NULL, 3, &xTaskKey_Handle );
 
     // 退出临界区, 所有任务允许切换 -------------------------------------------
     taskEXIT_CRITICAL();
