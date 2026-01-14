@@ -30,9 +30,31 @@ TaskHandle_t xTaskKey_Handle;
 TaskHandle_t xTask1_Handle;
 
 
+
+TimerHandle_t  timer1_handle;
+TimerHandle_t  timer2_handle;
+
 void USART0_on_recv(uint8_t* data, uint32_t len){
     printf("recv[%d]-> %s\n", len, data);
-
+		BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+	//0:启动timer1
+	//1:停止timer2
+	//2:启动timer2
+		if(data[0]==0x00){
+			//启动timer1
+				xTimerStartFromISR(timer1_handle,&xHigherPriorityTaskWoken);
+		}else if(data[0]==0x01){
+			//停止timer2
+				xTimerStopFromISR(timer2_handle,&xHigherPriorityTaskWoken);
+		}if(data[0]==0x02){
+			//启动timer2
+				xTimerStartFromISR(timer2_handle,&xHigherPriorityTaskWoken);
+		}
+			
+		if (xHigherPriorityTaskWoken != pdFALSE){
+			//当前中断退出前,自动触发切换到更高优先级的任务(触发)
+				portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+		}
 }
 
 void vTaskKey(){
@@ -69,8 +91,6 @@ void GPIO_init(){
 }
 
 
-TimerHandle_t  timer1_handle;
-TimerHandle_t  timer2_handle;
 
 void Keys_on_keydown(uint8_t key){
 
