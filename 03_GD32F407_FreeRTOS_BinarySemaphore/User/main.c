@@ -37,17 +37,30 @@ TimerHandle_t  timer1_handle;
 TimerHandle_t  timer2_handle;
 
 void USART0_on_recv(uint8_t* data, uint32_t len){
-    printf("recv[%d]-> %s\n", len, data);
+    
+		BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 	
-		
+		xSemaphoreGiveFromISR(xSemaphore,&xHigherPriorityTaskWoken);
+	
+	printf("recv[%d]-> %s\n -> woken: %ld\n", len, data,xHigherPriorityTaskWoken);
+		portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
 void vTaskKey(){
 
 		FlagStatus pre_state =RESET;
+		BaseType_t xReturn;
     while(1){
         FlagStatus cur_state =gpio_input_bit_get(GPIOA,GPIO_PIN_0);
-			
+				if(pre_state !=cur_state){
+					pre_state = cur_state;
+					
+					if(cur_state == SET){
+						
+						printf("Give: %ld\n",xReturn);
+						xSemaphoreGive(xSemaphore);
+					}
+				}
         vTaskDelay(10);  // 该函数内部会自动启用所有的中断, 有禁用操作后, 如果忘了启用，此函数会自动启用中断，使代码正常运行   
     }
     // 如果任务有可能结束, 一定要销毁自己
@@ -63,7 +76,7 @@ void vTask1(){
 		//阻塞等待,直到获取到信号
 			xSemaphoreTake(xSemaphore,portMAX_DELAY);//		pdMS_TO_TICKS(2000);
       printf("task1: %d xReturn: %ld\n", cnt++,xReturn);   
-			vTaskDelay(pdMS_TO_TICKS(100));
+			vTaskDelay(pdMS_TO_TICKS(1000));
 		}
 }
 
@@ -71,7 +84,8 @@ void vTask1(){
 void vTask2(){
     uint32_t cnt = 0;
     while(1){
-     //   printf("task1: %d\n", cnt++);   
+        printf("task2: %d\n", cnt++);   
+				vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
@@ -100,7 +114,7 @@ void vTaskFunc(uint8_t *pvParameters){
     printf("Init Complete!\n");
 
 		//创建二值信号量
-		xSemaphoreCreateBinary();
+		xSemaphore = xSemaphoreCreateBinary();
 		if( xSemaphore != NULL )	{
 			printf("The semaphore was created successfully\n");
 		}
