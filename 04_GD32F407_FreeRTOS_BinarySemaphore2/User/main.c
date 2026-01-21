@@ -16,7 +16,7 @@
 
 1.按键任务:PA0按下,发送信号
 2,task1:等待接受信号
-3,task2:不等待,间隔2000ms执行
+3,task2:等待接受信号
 
 -----------------------------
 创建二值信号量(二进制信号量)semphr.h
@@ -76,16 +76,23 @@ void vTask1(){
 		//阻塞等待,直到获取到信号
 			xSemaphoreTake(xSemaphore,portMAX_DELAY);//		pdMS_TO_TICKS(2000);
       printf("task1: %d xReturn: %ld\n", cnt++,xReturn);   
-			vTaskDelay(pdMS_TO_TICKS(1000));
+			vTaskDelay(pdMS_TO_TICKS(500));
 		}
 }
 
 
 void vTask2(){
     uint32_t cnt = 0;
+
+    BaseType_t xReturn = pdFALSE; // pdTRUE
     while(1){
-        printf("task2: %d\n", cnt++);   
-				vTaskDelay(pdMS_TO_TICKS(1000));
+        // 阻塞等待，直到获取到信号（一直等）
+        printf("task2 waiting...\n");
+        xReturn = xSemaphoreTake(xSemaphore, portMAX_DELAY); //portMAX_DELAY, pdMS_TO_TICKS(2000)
+        
+        printf("task2: %d xReturn: %ld\n", cnt++, xReturn);  // n Us
+        
+        vTaskDelay(pdMS_TO_TICKS(3000));
     }
 }
 
