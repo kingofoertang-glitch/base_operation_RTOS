@@ -18,7 +18,7 @@
 3,task3:等待接受信号		 优先级2		 3000ms
 
 -----------------------------
-创建二值信号量(二进制信号量)semphr.h
+创建互斥信号量(信号量)semphr.h
 - 创建完就发送一个信号
 
 *************************/
@@ -69,49 +69,54 @@ void vTaskKey(){
 
 int8_t count = 1;
 
+
+// 学生：优先级最低
 void vTask1(){
     uint32_t cnt = 0;
-		BaseType_t xReturn =pdFALSE; //pdTRUE
+    
+    BaseType_t xReturn = pdFALSE; // pdTRUE
     while(1){
-			printf("task1 try take...\n");
-		//阻塞等待,直到获取到信号
-			xReturn = xSemaphoreTake(xSemaphore,portMAX_DELAY);//		pdMS_TO_TICKS(2000);
-      printf("task1 running!\n");
+        printf("task1 low try take...\n");
+        // 阻塞等待，直到获取到信号（一直等）
+        xReturn = xSemaphoreTake(xSemaphore, portMAX_DELAY); //portMAX_DELAY, pdMS_TO_TICKS(2000)
+        
+        printf("task1 low running!\n"); 
 
-			delay_1ms(3000);
-			printf("task1 give\n");
-			
-			xSemaphoreGive(xSemaphore);
-			vTaskDelay(pdMS_TO_TICKS(1000));
-		}
+        delay_1ms(3000); // 模拟耗时操作
+                
+        printf("task1 low give!\n");         
+        xSemaphoreGive(xSemaphore);        
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
 }
 
-
+// 捣蛋坏同学: 优先级中等
 void vTask2(){
     uint32_t cnt = 0;
 
     while(1){
         // 阻塞等待，直到获取到信号（一直等）
-        printf("task2 middle...%d\n",cnt++);
-      
+        printf("task2 middle...%d\n", cnt++);        
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
-
+// 老师： 优先级最高
 void vTask3(){
     uint32_t cnt = 0;
-
+    
     BaseType_t xReturn = pdFALSE; // pdTRUE
     while(1){
-				printf("tas3 try take\n");
+        printf("task3 high try take...\n");
         // 阻塞等待，直到获取到信号（一直等）
-        
         xReturn = xSemaphoreTake(xSemaphore, portMAX_DELAY); //portMAX_DELAY, pdMS_TO_TICKS(2000)
-        printf("task3 running!\n");  // n Us
-      
-				delay_1ms(1000);
-				printf("task3 give\n");
+        
+        printf("task3 high running!\n"); 
+
+        delay_1ms(1000); // 模拟耗时操作
+                
+        printf("task3 high give!\n");         
+        xSemaphoreGive(xSemaphore);        
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
@@ -123,9 +128,6 @@ void GPIO_init(){
     gpio_mode_set(GPIOA, GPIO_MODE_INPUT, GPIO_PUPD_NONE, GPIO_PIN_0);
 }
 
-
-
-
 void sys_init(){
     // 1. 初始化外设
     GPIO_init();
@@ -133,33 +135,36 @@ void sys_init(){
 }
 
 
+
 void vTaskFunc(uint8_t *pvParameters){
     // 1. 初始化外设 
     sys_init();
-
-    printf("Init Complete!\n");
-
-	  // 创建计数型信号量
-    const UBaseType_t uxMaxCount = 5, uxInitialCount = 3;
-    // uxMaxCount 最大的消息数量
-    // uxInitialCount 初始已有的消息个数
-    xSemaphore = xSemaphoreCreateCounting(uxMaxCount, uxInitialCount);
-    if(xSemaphore != NULL){
     
+    printf("Init Complete!\n");
+    
+//    // 创建二值信号量
+//    xSemaphore = xSemaphoreCreateBinary();
+//    // 二值信号量，需要先给出一个
+//    xSemaphoreGive(xSemaphore);
+    
+    // 创建互斥信号量（自带1个信号）
+    xSemaphore = xSemaphoreCreateMutex();
+    if(xSemaphore != NULL){    
         printf("semaphore was created successfully.\n");
-    }
-		
-		//进入临界区,所有任务都会被禁止切换,中断被屏蔽---
-		taskENTER_CRITICAL();
-
+    }    
+    
+    // 进入临界区, 所有任务会被禁止切换，中断被屏蔽 ---------------------------
+    taskENTER_CRITICAL();
+    
     // 2. 创建1个独立的任务
     xTaskCreate( vTaskKey,  "vTaskKey", 64, NULL, 1, &xTaskKey_Handle );
     xTaskCreate( vTask1,    "vTask1",   64, NULL, 2, &xTask1_Handle   );
-    xTaskCreate( vTask2,  	"vTask2", 	64, NULL, 3, &xTask2_Handle );
-		xTaskCreate( vTask3,  	"vTask3", 	64, NULL, 4, &xTask3_Handle );
-    // 退出临界区, 所有任务允许切换 -------------------------------------------
+    xTaskCreate( vTask2,    "vTask2",   64, NULL, 3, &xTask2_Handle   );
+    xTaskCreate( vTask3,    "vTask3",   64, NULL, 4, &xTask3_Handle   );
+        
+		// 退出临界区, 所有任务允许切换 -------------------------------------------
     taskEXIT_CRITICAL();
-
+    
     // 3. 删除当前任务 鲁棒性(健壮性)
     vTaskDelete(NULL); // xStartTask_Handle    
 }
