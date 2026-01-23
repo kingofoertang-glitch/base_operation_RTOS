@@ -209,3 +209,189 @@ printf("task2	give\n");
 xSemaphoreGiveRecursive(sema_handler);
 ```
 
+# **消息队列🌟🌟🌟**
+
+### 队列
+
+**队列**（Queue）是一种数据结构，用于存储和管理元素的线性集合。它遵循先进先出（FIFO，First-In-First-Out）的原则，即最先进入队列的元素将首先被移出队列。
+
+队列通常具有两个基本操作：
+
+1. 入队（Enqueue）：将元素添加到队列的末尾。新元素进入队列后成为新的队尾。
+2. 出队（Dequeue）：从队列的头部移除并返回元素。被移除的元素为队列中存在时间最长的元素，即最先入队的元素。
+
+![060.png](https://cdn.nlark.com/yuque/0/2023/png/27903758/1688130483003-3c9756fa-d327-41bd-a04a-68df4bdedf02.png?x-oss-process=image%2Fformat%2Cwebp)
+
+### 消息队列
+
+![061.png](https://cdn.nlark.com/yuque/0/2023/png/27903758/1688130696125-4e7363d0-00fd-4872-9292-32df15383f24.png?x-oss-process=image%2Fformat%2Cwebp)
+
+### 功能介绍
+
+基础API如下
+
+| 功能          | 描述             |
+| ------------- | ---------------- |
+| xQueueCreate  | 创建队列         |
+| xQueueSend    | 向队列中添加元素 |
+| xQueueReceive | 从队列中取出元素 |
+
+#### 创建队列
+
+```c
+QueueHandle_t xQueueCreate(const UBaseType_t uxQueueLength,
+                        	const UBaseType_t uxItemSize);
+```
+
+参数说明：
+
+1. `const UBaseType_t uxQueueLength`消息队列的长度
+2. `const UBaseType_t uxItemSize`队列中单个元素的所占字节数。
+
+返回值：
+
+`QueueHandle_t`为消息队列的句柄。
+
+#### 入队
+
+```c
+BaseType_t xQueueSend( QueueHandle_t xQueue,
+                    	const void * const pvItemToQueue,
+                        TickType_t xTicksToWait);
+```
+
+参数说明：
+
+1. `QueueHandle_t xQueue`：队列句柄。
+2. `const void * const pvItemToQueue`：数据。
+3. `TickType_t xTicksToWait`：入队列等待时间。
+
+返回值:
+
+```
+BaseType_t`：队列是否成功或者失败，`pdTrue`或者`pdFalse
+```
+
+#### 出队
+
+```c
+BaseType_t xQueueReceive( QueueHandle_t xQueue,
+                          void * const pvBuffer,
+                          TickType_t xTicksToWait);
+```
+
+参数说明：
+
+1. `QueueHandle_t xQueue`：队列句柄。
+2. `void * const pvBuffer`：数据。
+3. `TickType_t xTicksToWait`：出队列等待时间。
+
+返回值:
+
+```
+BaseType_t`：出队列是否成功或者失败，`pdTrue`或者`pdFalse
+```
+
+
+
+### 基本类型数据
+
+构建时定义，定义数据的长度。
+
+```c
+QueueHandle_t queue = xQueueCreate(128, sizeof(uint8_t));
+```
+
+入队列操作
+
+```c
+uint8_t cnt = 0;
+xQueueSend(queue, &cnt, portMAX_DELAY);
+cnt++;
+```
+
+出队列操作
+
+```c
+uint8_t data;
+xQueueReceive(queue, &data, portMAX_DELAY);
+printf("queue recv: %d\r\n", data);
+```
+
+### 复杂类型数据
+
+通常复杂类型用`struct`表示。
+
+例如可以定义一个结构体：
+
+```c
+typedef struct {
+	char buffer[64];
+	uint32_t len;
+} MyData_t;
+```
+
+构建时定义，定义数据的长度。
+
+```c
+QueueHandle_t queue = xQueueCreate(128, sizeof(MyData_t));
+```
+
+入队列操作
+
+```c
+MyData_t data;
+
+char strbuffer[100];
+sprintf(strbuffer, "struct_%d", queue_num);
+data.len = strlen(strbuffer);
+strcpy(data.buffer, strbuffer);
+//data.buffer[data.len] = '\0';
+xQueueSend(queue, &data, portMAX_DELAY);
+```
+
+出队列操作
+
+```c
+MyData_t data;
+xQueueReceive(queue, &data, portMAX_DELAY);
+printf("queue recv: %d %s\r\n", data.len, data.buffer);
+```
+
+### 信号量和消息队列
+
+1. 从数据结构上进行比较。
+
+消息队列是一种数据结构，用于在任务之间传递和共享数据或消息。它可以存储多个消息，并且可以按照先进先出（FIFO）的顺序进行访问。
+
+信号量是一种同步机制，用于控制对共享资源的访问和任务之间的同步。它可以表示可用资源的数量或资源的占用状态。
+
+1. 从操作方式上进行比较。
+
+消息队列可以存储和获取多个消息。
+
+信号量只有获取和释放两种操作。
+
+1. 从特性上进行比较。
+
+消息队列可以按照先进先出的顺序处理消息。
+
+信号量只表示资源的可用状态或占用状态。
+
+
+
+|            | **信号量**                                             | **队列**                          |
+| ---------- | ------------------------------------------------------ | --------------------------------- |
+| **初始化** | 仅有计数值，信号量结构体                               | 可存储队列项目，队列结构体        |
+| **Input**  | Give信号量：计数值++，不阻塞计数值已经最大时，返回Fail | Send队列项，队列满时，**可阻塞**  |
+| **Output** | Take信号量：计数值--计数值为0时，**可阻塞**            | Receive队列，队列空时，**可阻塞** |
+
+
+
+注意，函数内部如果有多层函数调用， 或者变量字节数较大，会导致栈溢出，可调整任务最大的栈大小。
+
+例如：将64改成128
+
+​    xTaskCreate( vTask2,    "vTask2",  64, NULL, 3, &xTask2_Handle   );改为
+
+​    xTaskCreate( vTask2,    "vTask2",  128, NULL, 3, &xTask2_Handle   )
