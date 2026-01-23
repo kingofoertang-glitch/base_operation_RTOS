@@ -220,11 +220,9 @@ xSemaphoreGiveRecursive(sema_handler);
 1. 入队（Enqueue）：将元素添加到队列的末尾。新元素进入队列后成为新的队尾。
 2. 出队（Dequeue）：从队列的头部移除并返回元素。被移除的元素为队列中存在时间最长的元素，即最先入队的元素。
 
-![060.png](https://cdn.nlark.com/yuque/0/2023/png/27903758/1688130483003-3c9756fa-d327-41bd-a04a-68df4bdedf02.png?x-oss-process=image%2Fformat%2Cwebp)
 
-### 消息队列
 
-![061.png](https://cdn.nlark.com/yuque/0/2023/png/27903758/1688130696125-4e7363d0-00fd-4872-9292-32df15383f24.png?x-oss-process=image%2Fformat%2Cwebp)
+## 消息队列
 
 ### 功能介绍
 
